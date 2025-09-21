@@ -10,6 +10,7 @@ import json
 import matplotlib.pyplot as plt
 import time
 import random
+from src.database import OMRDatabase
 
 # Set page configuration
 st.set_page_config(
@@ -66,9 +67,14 @@ def process_omr_sheet_mock(image_path, version):
     
     for i, subject in enumerate(subjects):
         if i == len(subjects) - 1:
-            subject_scores[subject] = remaining
+            subject_scores[subject] = max(0, remaining)
         else:
-            score = random.randint(15, min(20, remaining - (len(subjects) - i - 1) * 10))
+            max_score = min(20, remaining - (len(subjects) - i - 1) * 10)
+            min_score = min(15, max_score)
+            if max_score < min_score:
+                score = max_score
+            else:
+                score = random.randint(min_score, max_score)
             subject_scores[subject] = score
             remaining -= score
     
@@ -86,22 +92,51 @@ def process_omr_sheet_mock(image_path, version):
         "processing_time": f"{random.uniform(0.5, 2.5):.2f}s"
     }
 
-# Initialize session state
+
+# Initialize session state and database
 if "results" not in st.session_state:
     st.session_state.results = []
     st.session_state.processed = False
+if "db" not in st.session_state:
+    st.session_state.db = OMRDatabase()
 
 # App title and description
 st.markdown('<h1 class="main-header">Automated OMR Evaluation System</h1>', unsafe_allow_html=True)
 st.write("Upload OMR sheet images to automatically evaluate and score them.")
 
+
 # Sidebar for navigation and settings
 with st.sidebar:
     st.header("Settings")
-    
-    # Version selection
-    version = st.selectbox(
-        "Select OMR Version",
-        ["Set A", "Set B"],
-        index=0
+    st.header("Upload OMR Sheets")
+    uploaded_files = st.file_uploader(
+        "Upload OMR sheet images",
+        type=["jpeg", "jpg", "png"],
+        accept_multiple_files=True
     )
+
+
+# Process uploaded files and display results
+if uploaded_files:
+    st.session_state.results = []
+    for uploaded_file in uploaded_files:
+        # Save uploaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpeg") as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            tmp_path = tmp_file.name
+        # Call mock OMR processing (remove version argument)
+        result = process_omr_sheet_mock(tmp_path, version=None)
+        st.session_state.results.append(result)
+        st.session_state.db.save_result(result)
+        os.remove(tmp_path)
+
+    st.session_state.processed = True
+
+# Display results if processed
+if st.session_state.processed and st.session_state.results:
+    st.subheader("OMR Results")
+    for result in st.session_state.results:
+        st.markdown(f"<div class='score-card'><span class='total-score'>Student ID: {result['student_id']} | Total Score: {result['total_score']}</span></div>", unsafe_allow_html=True)
+        st.write("Subject Scores:")
+        for subject, score in result['subject_scores'].items():
+            st.markdown(f"<span class='subject-score'>{subject}: {score}</span>", unsafe_allow_html=True)

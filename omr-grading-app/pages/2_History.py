@@ -8,57 +8,37 @@ st.set_page_config(page_title="Results History", page_icon="📊")
 
 st.title("📊 Results History")
 
-# Initialize database
-@st.cache_resource
-def init_database():
-	return OMRDatabase()
 
-db = init_database()
+# Use shared database from session state
+if "db" not in st.session_state:
+	st.session_state.db = OMRDatabase()
+db = st.session_state.db
 
 # Get all exams from database
 try:
 	exams = db.get_all_exams()
-    
 	if not exams:
 		st.info("No exams processed yet.")
 	else:
-		# Display exams in a table
 		st.subheader("All Processed Exams")
 		exam_data = []
 		for exam in exams:
 			exam_data.append({
-				"ID": exam[0],
-				"Filename": exam[1],
-				"Set": exam[2],
-				"Score": exam[3],
-				"Correct": f"{exam[4]}/{exam[5]}",
-				"Date": exam[6]
+				"Student ID": exam.get("student_id", "-"),
+				"Score": exam.get("total_score", "-"),
+				"Subjects": ", ".join([f"{sub}: {score}" for sub, score in exam.get("subject_scores", {}).items()]),
+				"Processing Time": exam.get("processing_time", "-")
 			})
-        
 		df = pd.DataFrame(exam_data)
 		st.dataframe(df)
-        
-		# Show statistics
-		st.subheader("Statistics")
-		stats = db.get_stats()
-        
-		col1, col2, col3, col4 = st.columns(4)
-		col1.metric("Total Exams", stats['total_exams'])
-		col2.metric("Average Score", f"{stats['avg_score']:.2f}%")
-		col3.metric("Highest Score", f"{stats['max_score']:.2f}%")
-		col4.metric("Lowest Score", f"{stats['min_score']:.2f}%")
-        
-		# Create a score distribution chart
+		# Score distribution
 		st.subheader("Score Distribution")
-		scores = [exam[3] for exam in exams]
-        
+		scores = [exam.get("total_score", 0) for exam in exams]
 		fig, ax = plt.subplots()
 		ax.hist(scores, bins=10, edgecolor='black', alpha=0.7)
-		ax.set_xlabel('Score (%)')
+		ax.set_xlabel('Score')
 		ax.set_ylabel('Frequency')
 		ax.set_title('Distribution of Exam Scores')
-        
 		st.pyplot(fig)
-        
 except Exception as e:
 	st.error(f"Error accessing database: {str(e)}")

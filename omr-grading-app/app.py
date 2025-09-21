@@ -100,4 +100,8 @@ with st.sidebar:
     st.header("Settings")
     
     # Version selection
-    version = st.selectbox(
+        version = st.selectbox(
+            "Select OMR Version",
+            ["Set A", "Set B"],
+            index=0
+        )
